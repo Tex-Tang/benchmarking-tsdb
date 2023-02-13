@@ -19,7 +19,7 @@ type QueryLatencyRecorder struct {
 }
 
 func NewQueryLatencyRecorder(filename string) *QueryLatencyRecorder {
-	file, err := os.OpenFile("influx-latency.csv", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+	file, err := os.OpenFile(filename, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
 	if err != nil {
 		panic(err)
 	}
@@ -32,12 +32,12 @@ func NewQueryLatencyRecorder(filename string) *QueryLatencyRecorder {
 }
 
 func (q *QueryLatencyRecorder) Record(latency QueryLatency) {
-	text := fmt.Sprintf("%s,%s,%d",
+	text := fmt.Sprintf("%s,%s,%d\n",
 		latency.start.Format(time.RFC3339),
 		latency.key,
 		time.Since(latency.start).Milliseconds(),
 	)
-	log.Println(text)
+	log.Printf(text)
 
 	q.mtx.Lock()
 	_, err := q.file.WriteString(text)

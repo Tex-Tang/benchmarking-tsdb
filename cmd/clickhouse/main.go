@@ -1,5 +1,5 @@
 // This script is made to benchmark the performance of ClickHouse
-// It will insert 15000 packets per second and downsampling the raw
+// It will insert 10000 packets per second and downsampling the raw
 // data to 15 minutes resolution for an hour.
 // Before running the script, make sure you have setup the ClickHouse
 // database and table.
@@ -19,8 +19,8 @@ ENGINE = MergeTree
 ORDER BY (timestamp, asset_id, attribute_id);
 
 Setup the `resolution_15_min` table
-DROP TABLE IF EXISTS resolution_1_min;
-CREATE TABLE resolution_1_min
+DROP TABLE IF EXISTS resolution_15_min;
+CREATE TABLE resolution_15_min
 (
 	"timestamp" DateTime64(3),
 	"asset_id" UInt32,
@@ -120,8 +120,8 @@ func main() {
 		func(packets []shared.Packet) error {
 			return Insert(conn, packets)
 		},
-		func() error {
-			return DownSampling(conn, time.Now().Add(-15*time.Minute), time.Now())
+		func(start time.Time, end time.Time) error {
+			return DownSampling(conn, start, end)
 		},
 	)
 }

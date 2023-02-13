@@ -8,7 +8,7 @@ import (
 
 type InsertFunc func([]Packet) error
 
-type DownSamplingFunc func() error
+type DownSamplingFunc func(start time.Time, end time.Time) error
 
 func RunTest(
 	recorder *QueryLatencyRecorder,
@@ -25,7 +25,7 @@ func RunTest(
 		case <-ticker1sec.C:
 			go func() {
 				performanceStart := time.Now()
-				packets := GeneratePackets(time.Now(), 15000, 10)
+				packets := GeneratePackets(time.Now(), 20000, 5)
 				err := insertFunc(packets)
 				if err != nil {
 					log.Fatal(err)
@@ -38,7 +38,11 @@ func RunTest(
 		case <-ticker5min.C:
 			go func() {
 				performanceStart := time.Now()
-				err := downSamplingFunc()
+
+				start := time.Unix((time.Now().Unix()/(15*60))*15*60, 0)
+				end := start.Add(15 * time.Minute)
+
+				err := downSamplingFunc(start, end)
 				if err != nil {
 					log.Fatal(err)
 				}
