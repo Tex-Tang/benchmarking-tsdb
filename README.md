@@ -4,9 +4,11 @@ This script is used to benchmark the performance of different time-series databa
 
 ## How to run the test?
 
-1. Replace the configuration in your intended database's benchmarking script. For example, if you want to benchmark InfluxDB, you should replace `<host>` to `localhost` etc.
-2. Configure the filename to store the benchmarking result. `filename := "influx-2vCPU-latency.csv"` or `filename := "influx-4vCPU-latency.csv"`
-3. Run the benchmarking script. `go run ./cmd/influx/main.go`
+1. Setup the database you want to benchmark. For example, if you want to benchmark InfluxDB, you should setup InfluxDB first.
+2. Setup the tables or buckets in the database.
+3. Replace the configuration in your intended database's benchmarking script. For example, if you want to benchmark InfluxDB, you should replace `<host>` to `localhost` etc.
+4. Configure the filename to store the benchmarking result. `filename := "influx-2vCPU-latency.csv"` or `filename := "influx-4vCPU-latency.csv"`
+5. Run the benchmarking script. `go run ./cmd/influx/main.go`
 
 ## How to run the benchmarking script on GCP VM?
 
