@@ -4,6 +4,7 @@ go 1.20
 
 require (
 	github.com/ClickHouse/clickhouse-go/v2 v2.6.0
+	github.com/go-sql-driver/mysql v1.7.0
 	github.com/influxdata/influxdb-client-go/v2 v2.12.2
 )
 
