@@ -96,23 +96,24 @@ func DownSampling(conn clickhouse.Conn, start time.Time, end time.Time) (err err
 func main() {
 	conn, err := clickhouse.Open(&clickhouse.Options{
 		Addr: []string{
-			"clickhouse-16dfb587-resynctech.aivencloud.com:22546",
+			"<host>:<port>",
 		},
 		Auth: clickhouse.Auth{
 			Database: "default",
-			Username: "avnadmin",
-			Password: "AVNS_J6A2GgmTdC_cSXcPsEo",
+			Username: "<username>",
+			Password: "<password>",
 		},
 		TLS: &tls.Config{
 			InsecureSkipVerify: true,
 		},
 	})
+	filename := "clickhouse-<>vCPU-latency.csv"
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	recorder := shared.NewQueryLatencyRecorder("clickhouse-latency.csv")
+	recorder := shared.NewQueryLatencyRecorder(filename)
 
 	shared.RunTest(
 		recorder,
