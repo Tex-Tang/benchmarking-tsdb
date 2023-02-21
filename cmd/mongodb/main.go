@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"time"
+
 	//"fmt"
 
 	"gitlab.com/resynctech/resync-cloud/benchmarking/shared"
@@ -26,6 +27,7 @@ func DownSampling(client *mongo.Client, start time.Time, end time.Time) (err err
 			{Key: "$group", Value: bson.D{
 				{Key: "_id", Value: bson.D{
 					{Key: "asset_id", Value: "$metadata.asset_id"},
+					{Key: "attribute_id", Value: "$metadata.attribute_id"},
 					{Key: "timestamp", Value: bson.D{
 						{Key: "$subtract", Value: bson.A{
 							"$timestamp",
@@ -39,16 +41,7 @@ func DownSampling(client *mongo.Client, start time.Time, end time.Time) (err err
 						}},
 					}},
 				}},
-				{Key: "1", Value: bson.D{{Key: "$avg", Value: "$1"}}},
-				{Key: "2", Value: bson.D{{Key: "$avg", Value: "$2"}}},
-				{Key: "3", Value: bson.D{{Key: "$avg", Value: "$3"}}},
-				{Key: "4", Value: bson.D{{Key: "$avg", Value: "$4"}}},
-				{Key: "5", Value: bson.D{{Key: "$avg", Value: "$5"}}},
-				{Key: "6", Value: bson.D{{Key: "$avg", Value: "$6"}}},
-				{Key: "7", Value: bson.D{{Key: "$avg", Value: "$7"}}},
-				{Key: "8", Value: bson.D{{Key: "$avg", Value: "$8"}}},
-				{Key: "9", Value: bson.D{{Key: "$avg", Value: "$9"}}},
-				{Key: "10", Value: bson.D{{Key: "$avg", Value: "$10"}}},
+				{Key: "value", Value: bson.D{{Key: "$avg", Value: "$value"}}},
 			}},
 		},
 		{
@@ -57,17 +50,10 @@ func DownSampling(client *mongo.Client, start time.Time, end time.Time) (err err
 				{Key: "timestamp", Value: "$_id.timestamp"},
 				{Key: "metadata", Value: bson.D{
 					{Key: "asset_id", Value: "$_id.asset_id"},
+					{Key: "attribute_id", Value: "$_id.attribute_id"},
+					{Key: "measurement", Value: "mean"},
 				}},
-				{Key: "1", Value: true},
-				{Key: "2", Value: true},
-				{Key: "3", Value: true},
-				{Key: "4", Value: true},
-				{Key: "5", Value: true},
-				{Key: "6", Value: true},
-				{Key: "7", Value: true},
-				{Key: "8", Value: true},
-				{Key: "9", Value: true},
-				{Key: "10", Value: true},
+				{Key: "value", Value: true},
 			}},
 		},
 	}
@@ -84,11 +70,15 @@ func DownSampling(client *mongo.Client, start time.Time, end time.Time) (err err
 	}
 
 	for _, result := range results {
+		timestamp := result.(bson.D).Map()["timestamp"]
+		metadata := result.(bson.D).Map()["metadata"].(bson.D).Map()
 		_, err = client.Database("resync").Collection("resolution_15_min").UpdateOne(
 			context.Background(),
 			bson.D{
-				{Key: "timestamp", Value: result.(bson.M)["timestamp"]},
-				{Key: "metadata.asset_id", Value: result.(bson.M)["metadata"].(bson.M)["asset_id"]},
+				{Key: "timestamp", Value: timestamp},
+				{Key: "metadata.asset_id", Value: metadata["asset_id"]},
+				{Key: "metadata.attribute_id", Value: metadata["attribute_id"]},
+				{Key: "metadata.measurement", Value: metadata["measurement"]},
 			},
 			bson.D{
 				{Key: "$set", Value: result},
@@ -131,22 +121,6 @@ func Insert(client *mongo.Client, packets []shared.Packet) (err error) {
 		))
 	}
 	_, err = client.Database("resync").Collection("raw").BulkWrite(context.Background(), packetsToInsert)
-	if err != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI("mongodb+srv://tester:DZ7W9y24G5Si6l81@tsb-benchmark-229280c7.mongo.ondigitalocean.com/admin?tls=true&authSource=admin&replicaSet=tsb-benchmark"))
-	defer func() {
-		if err = client.Disconnect(ctx); err != nil {
-			panic(err)
-		}
-	}()
-
-	err = client.Ping(context.Background(), readpref.Primary())
-	if err != nil {
-		panic(err)
-	}
-	} 
 	return err
 }
 
@@ -154,7 +128,9 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI("mongodb+srv://tester:s561FQ4E27TrJL03@tsdb-benchmark-a6f082fa.mongo.ondigitalocean.com/admin?authSource=admin&replicaSet=tsdb-benchmark&tls=true"))
+	connStr := "mongodb+srv://doadmin:8j06oJ4cKN2b9G71@db-mongodb-sgp1-91395-c2ae6d49.mongo.ondigitalocean.com/admin?tls=true&authSource=admin&replicaSet=db-mongodb-sgp1-91395"
+	filename := "mongodb-8vCPU-latency.csv"
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(connStr))
 	defer func() {
 		if err = client.Disconnect(ctx); err != nil {
 			panic(err)
@@ -166,7 +142,7 @@ func main() {
 		panic(err)
 	}
 
-	recorder := shared.NewQueryLatencyRecorder("mongodb-8vCPU-latency.csv")
+	recorder := shared.NewQueryLatencyRecorder(filename)
 	shared.RunTest(
 		recorder,
 		"mongodb",
@@ -205,49 +181,30 @@ var low = ISODate("2023-02-01T00:00:00.000+02:00")
 var high = ISODate("2023-02-31T00:00:00.000+02:00")
 db.raw.aggregate([
   {$match: {timestamp:{$gte: low, $lt: high}}},
-  {$group: {
+	{$group: {
      _id:{
 			 asset_id: "$metadata.asset_id",
+			 attribute_id: "$metadata.attribute_id",
        timestamp: {
-				$subtract: ["$timestamp", {
-         $mod: [{
-           $subtract: ["$timestamp", low]
-         }, 60*1000]
-       }]
-				 }
+				$subtract: [
+					"$timestamp",
+					{ $mod: [{ $subtract: ["$timestamp", low] }, 60*1000]}
+				]
+			}
      },
-     1: {$avg: "$1"},
-     2: {$avg: "$2"},
-     3: {$avg: "$3"},
-		 4: {$avg: "$4"},
-		 5: {$avg: "$5"},
-		 6: {$avg: "$6"},
-		 7: {$avg: "$7"},
-		 8: {$avg: "$8"},
-		 9: {$avg: "$9"},
-		 10: {$avg: "$10"},
-    }
-  },
+     value: {$avg: "$value"},
+  }},
 	{
 		$project:{
 			_id: false,
 			timestamp: "$_id.timestamp",
 			metadata: {
-				asset_id: "$_id.asset_id"
+				asset_id: "$_id.asset_id",
+				attribute_id: "$_id.attribute_id",
+				measurement: "mean"
 			},
-			"1" :true,
-			"2" :true,
-			"3" :true,
-			"4" :true,
-			"5" :true,
-			"6" :true,
-			"7" :true,
-			"8" :true,
-			"9" :true,
-			"10" :true,
+			value: true
 		}
 	},
-]).forEach(function(doc){
-   db.resolution_1_min.insert(doc);
-});
+])
 */
