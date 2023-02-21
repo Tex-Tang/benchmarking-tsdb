@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"time"
+	//"fmt"
 
 	"gitlab.com/resynctech/resync-cloud/benchmarking/shared"
 	"go.mongodb.org/mongo-driver/bson"
@@ -71,7 +72,7 @@ func DownSampling(client *mongo.Client, start time.Time, end time.Time) (err err
 		},
 	}
 
-	cursor, err := client.Database("test").Collection("raw").Aggregate(context.Background(), stages)
+	cursor, err := client.Database("resync").Collection("raw").Aggregate(context.Background(), stages)
 	if err != nil {
 		return (err)
 	}
@@ -83,7 +84,7 @@ func DownSampling(client *mongo.Client, start time.Time, end time.Time) (err err
 	}
 
 	for _, result := range results {
-		_, err = client.Database("test").Collection("resolution_15_min").UpdateOne(
+		_, err = client.Database("resync").Collection("resolution_15_min").UpdateOne(
 			context.Background(),
 			bson.D{
 				{Key: "timestamp", Value: result.(bson.M)["timestamp"]},
@@ -115,19 +116,37 @@ type MongoDBPacket struct {
 }
 
 func Insert(client *mongo.Client, packets []shared.Packet) (err error) {
-	packetsToInsert := make([]interface{}, len(packets))
-	for i, v := range packets {
-		packetsToInsert[i] = MongoDBPacket{
-			Timestamp: v.Timestamp,
-			Metadata: MongoDBPacketMetadata{
-				AssetID:     v.AssetID,
-				AttributeID: v.AttributeID,
-				Measurement: v.Measurement,
+	packetsToInsert := []mongo.WriteModel{}
+	for _, v := range packets {
+		packetsToInsert = append(packetsToInsert, mongo.NewInsertOneModel().SetDocument(
+			MongoDBPacket{
+				Timestamp: v.Timestamp,
+				Metadata: MongoDBPacketMetadata{
+					AssetID:     v.AssetID,
+					AttributeID: v.AttributeID,
+					Measurement: v.Measurement,
+				},
+				Value: v.Value,
 			},
-			Value: v.Value,
-		}
+		))
 	}
-	_, err = client.Database("resync").Collection("raw").InsertMany(context.Background(), packetsToInsert)
+	_, err = client.Database("resync").Collection("raw").BulkWrite(context.Background(), packetsToInsert)
+	if err != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI("mongodb+srv://tester:DZ7W9y24G5Si6l81@tsb-benchmark-229280c7.mongo.ondigitalocean.com/admin?tls=true&authSource=admin&replicaSet=tsb-benchmark"))
+	defer func() {
+		if err = client.Disconnect(ctx); err != nil {
+			panic(err)
+		}
+	}()
+
+	err = client.Ping(context.Background(), readpref.Primary())
+	if err != nil {
+		panic(err)
+	}
+	} 
 	return err
 }
 
@@ -135,7 +154,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI("mongodb://localhost:27017"))
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI("mongodb+srv://tester:s561FQ4E27TrJL03@tsdb-benchmark-a6f082fa.mongo.ondigitalocean.com/admin?authSource=admin&replicaSet=tsdb-benchmark&tls=true"))
 	defer func() {
 		if err = client.Disconnect(ctx); err != nil {
 			panic(err)
@@ -147,7 +166,7 @@ func main() {
 		panic(err)
 	}
 
-	recorder := shared.NewQueryLatencyRecorder("mongodb-<>vCPU-latency.csv")
+	recorder := shared.NewQueryLatencyRecorder("mongodb-8vCPU-latency.csv")
 	shared.RunTest(
 		recorder,
 		"mongodb",
